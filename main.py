@@ -5,7 +5,6 @@ from src.backend.database import SessionLocal, engine, Base
 from src.backend.schemas import UserCreate, UserLogin
 from passlib.context import CryptContext
 
-# Load DATABASE_URL from environment variable
 
 MYSQL_USER = os.getenv("MYSQLUSER")
 MYSQL_HOST = os.getenv("MYSQLHOST")

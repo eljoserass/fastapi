@@ -11,9 +11,9 @@ MYSQL_USER = os.getenv("MYSQLUSER")
 MYSQL_HOST = os.getenv("MYSQLHOST")
 MYSQL_DB = os.getenv("MYSQLDATABASE")
 MYSQL_PORT = os.getenv("MYSQLPORT")
-MYSQL_PASSWORD = os.getenv("MYSQLPASSWORD")
+MYSQL_PASSWORD = os.getenv("MYSQL_ROOT_PASSWORD")
 MYSQL_CONNECTOR = "mysql+mysqlconnector"
-DATABASE_URL = f"{MYSQL_CONNECTOR.replace("'", "")}://{MYSQL_USER.replace("'", "")}:{MYSQL_PASSWORD.replace("'", "")}@{MYSQL_HOST.replace("'", "")}:{MYSQL_PORT.replace("'", "")}/{MYSQL_DB.replace("'", "")}"
+DATABASE_URL = f"{MYSQL_CONNECTOR}://{MYSQL_USER}:{MYSQL_PASSWORD}@{MYSQL_HOST}:{MYSQL_PORT}/{MYSQL_DB}"
 
 # Create the database tables
 Base.metadata.create_all(bind=engine)

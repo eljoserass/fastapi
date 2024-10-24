@@ -1,21 +1,6 @@
-import os
-from sqlalchemy import create_engine, Column, Integer, String, ForeignKey  # Import ForeignKey
-from sqlalchemy.ext.declarative import declarative_base
-from sqlalchemy.orm import sessionmaker, relationship  # Import relationship
-
-# Load DATABASE_URL from environment variable
-DATABASE_URL = os.getenv("MYSQL_URL")
-print (DATABASE_URL)
-# Create the SQLAlchemy engine
-engine = create_engine(DATABASE_URL)
-
-# Create a configured "Session" class
-SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
-
-# Create a Base class for declarative models
-Base = declarative_base()
-
-# Define your models here
+from sqlalchemy import Column, Integer, String, ForeignKey
+from sqlalchemy.orm import relationship
+from database import Base
 
 class User(Base):
     __tablename__ = "users"

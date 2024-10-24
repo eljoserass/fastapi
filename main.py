@@ -6,7 +6,14 @@ from src.backend.schemas import UserCreate, UserLogin
 from passlib.context import CryptContext
 
 # Load DATABASE_URL from environment variable
-DATABASE_URL = os.getenv("MYSQL_URL")
+
+MYSQL_USER = os.getenv("MYSQLUSER")
+MYSQL_HOST = os.getenv("MYSQLHOST")
+MYSQL_DB = os.getenv("MYSQLDATABASE")
+MYSQL_PORT = os.getenv("MYSQLPORT")
+MYSQL_PASSWORD = os.getenv("MYSQLPASSWORD")
+MYSQL_CONNECTOR = "mysql+mysqlconnector"
+DATABASE_URL = f"{MYSQL_CONNECTOR}://{MYSQL_USER}:{MYSQL_PASSWORD}@{MYSQL_HOST}:{MYSQL_PORT}/{MYSQL_DB}"
 
 # Create the database tables
 Base.metadata.create_all(bind=engine)

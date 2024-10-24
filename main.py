@@ -1,23 +1,25 @@
 import os
-from fastapi import FastAPI, HTTPException, Depends
+from fastapi import FastAPI, HTTPException, Depends, Security
 from sqlalchemy.orm import Session
 from src.backend.database import SessionLocal, engine, Base
-from src.backend.schemas import UserCreate, UserLogin
+from src.backend.schemas import UserCreate, UserLogin, ClientCreate, OrderCreate
+from src.backend.models import User, Client, Order
 from passlib.context import CryptContext
+from jose import JWTError, jwt
+from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 
+# JWT settings
+SECRET_KEY = os.getenv("SECRET_KEY", "your_secret_key")
+ALGORITHM = "HS256"
+ACCESS_TOKEN_EXPIRE_MINUTES = 120
 
-MYSQL_USER = os.getenv("MYSQLUSER")
-MYSQL_HOST = os.getenv("MYSQLHOST")
-MYSQL_DB = os.getenv("MYSQL_DATABASE")
-MYSQL_PORT = os.getenv("MYSQLPORT")
-MYSQL_PASSWORD = os.getenv("MYSQL_ROOT_PASSWORD")
-MYSQL_CONNECTOR = "mysql+mysqlconnector"
-DATABASE_URL = f"{MYSQL_CONNECTOR}://{MYSQL_USER}:{MYSQL_PASSWORD}@{MYSQL_HOST}:{MYSQL_PORT}/{MYSQL_DB}"
+oauth2_scheme = OAuth2PasswordBearer(tokenUrl="token")
 
 # Create the database tables
-Base.metadata.create_all(bind=engine)
 
 app = FastAPI()
+
+Base.metadata.create_all(bind=engine)
 
 # Password hashing
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
@@ -30,38 +32,75 @@ def get_db():
     finally:
         db.close()
 
+# Function to create JWT token
+def create_access_token(data: dict, expires_delta=None):
+    from datetime import datetime, timedelta
+
+    to_encode = data.copy()
+    if expires_delta:
+        expire = datetime.utcnow() + expires_delta
+    else:
+        expire = datetime.utcnow() + timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
+    to_encode.update({"exp": expire})
+    encoded_jwt = jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
+    return encoded_jwt
+
+# Endpoint to register a user
 @app.post("/register")
 async def register(user: UserCreate, db: Session = Depends(get_db)):
-    from src.backend.models import User
-    # Check if the user already exists
     existing_user = db.query(User).filter(User.phone_number == user.phone_number).first()
     if existing_user:
         raise HTTPException(status_code=400, detail="User already exists")
-
-    # Hash the password
     hashed_password = pwd_context.hash(user.password)
-
-    # Create a new user
     new_user = User(phone_number=user.phone_number, password=hashed_password)
     db.add(new_user)
     db.commit()
     db.refresh(new_user)
-
     return {"message": "User registered successfully", "user_id": new_user.id}
 
-@app.post("/login")
-async def login(user: UserLogin, db: Session = Depends(get_db)):
-    from src.backend.models import User
-    # Retrieve the user by phone number
-    existing_user = db.query(User).filter(User.phone_number == user.phone_number).first()
-    if not existing_user:
-        raise HTTPException(status_code=400, detail="Invalid phone number or password")
+# Endpoint to login and get JWT token
+@app.post("/token")
+async def login(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depends(get_db)):
+    user = db.query(User).filter(User.phone_number == form_data.username).first()
+    if not user or not pwd_context.verify(form_data.password, user.password):
+        raise HTTPException(status_code=400, detail="Incorrect username or password")
+    access_token = create_access_token(data={"sub": user.phone_number})
+    return {"access_token": access_token, "token_type": "bearer"}
 
-    # Verify the password
-    if not pwd_context.verify(user.password, existing_user.password):
-        raise HTTPException(status_code=400, detail="Invalid phone number or password")
+# Endpoint to get clients of the logged-in user
+@app.get("/clients")
+async def get_clients(token: str = Depends(oauth2_scheme), db: Session = Depends(get_db)):
+    credentials_exception = HTTPException(status_code=401, detail="Could not validate credentials")
+    try:
+        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+        phone_number: str = payload.get("sub")
+        if phone_number is None:
+            raise credentials_exception
+    except JWTError:
+        raise credentials_exception
+    user = db.query(User).filter(User.phone_number == phone_number).first()
+    if user is None:
+        raise credentials_exception
+    return user.clients
 
-    return {"message": "Login successful", "user_id": existing_user.id}
+# Endpoint to get orders of a specific client
+@app.get("/clients/{client_id}/orders")
+async def get_orders(client_id: int, token: str = Depends(oauth2_scheme), db: Session = Depends(get_db)):
+    credentials_exception = HTTPException(status_code=401, detail="Could not validate credentials")
+    try:
+        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+        phone_number: str = payload.get("sub")
+        if phone_number is None:
+            raise credentials_exception
+    except JWTError:
+        raise credentials_exception
+    user = db.query(User).filter(User.phone_number == phone_number).first()
+    if user is None:
+        raise credentials_exception
+    client = db.query(Client).filter(Client.id == client_id, Client.user_id == user.id).first()
+    if client is None:
+        raise HTTPException(status_code=404, detail="Client not found")
+    return client.orders
 
 @app.get("/")
 async def root():

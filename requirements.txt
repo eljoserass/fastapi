@@ -3,3 +3,6 @@ hypercorn==0.14.4
 mysql-connector-python
 sqlalchemy
 passlib[bcrypt]
+pyjwt
+python-jose
+python-multipart

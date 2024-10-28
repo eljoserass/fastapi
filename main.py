@@ -1,15 +1,26 @@
 import os
-from fastapi import FastAPI, HTTPException, Depends, Security
+from fastapi import FastAPI, HTTPException, Depends, Form, Request
+from fastapi.responses import FileResponse
 from sqlalchemy.orm import Session
 from src.backend.database import SessionLocal, engine, Base
 from src.backend.schemas import UserCreate, UserLogin, ClientCreate, OrderCreate
-from src.backend.models import User, Client, Order
+from src.backend.models import User, Client, Order, Message
 from passlib.context import CryptContext
 from jose import JWTError, jwt
+from pydantic import BaseModel, Field
+#from twilio.rest import Client as TwilioClient
+import requests
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
+from twilio.twiml.messaging_response import MessagingResponse
+
+
+# TODO do this correctly
+TWILIO_SID = os.getenv("TWILIO_SID")
+TWILIO_AUTH = os.getenv("TWILIO_AUTH")
+#twilio_client = Client(TWILIO_SID, TWILIO_AUTH)
 
 # JWT settings
-SECRET_KEY = os.getenv("SECRET_KEY", "your_secret_key")
+SECRET_KEY = os.getenv("SECRET_KEY")
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = 120
 
@@ -101,6 +112,93 @@ async def get_orders(client_id: int, token: str = Depends(oauth2_scheme), db: Se
     if client is None:
         raise HTTPException(status_code=404, detail="Client not found")
     return client.orders
+
+
+class WhatsAppMessage(BaseModel):
+    From: str = Field(..., description="The sender's phone number")
+    Body: str = Field("", description="The message body")  # Optional for media-only messages
+    NumMedia: int = Field(0, description="Number of media files attached")
+
+# Dependency to parse form data into the Pydantic model
+async def whatsapp_message(
+    From: str = Form(...),
+    Body: str = Form(""),
+    NumMedia: int = Form(0)
+) -> WhatsAppMessage:
+    return WhatsAppMessage(From=From, Body=Body, NumMedia=NumMedia)
+
+@app.post("/whatsapp/{user_id}")
+async def whatsapp_webhook(user_id: int, request: Request, message: WhatsAppMessage = Depends(whatsapp_message), db: Session = Depends(get_db)):
+    """
+    Webhook endpoint to handle incoming WhatsApp messages, including media.
+    """
+    # Gather media URLs if available
+    form_data = await request.form()
+
+    # Gather media URLs if available and download them
+    media_urls = []
+    from datetime import datetime
+    current_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    phone_number = message.From.replace("whatsapp:", "")
+    for i in range(message.NumMedia):
+        media_url = form_data.get(f"MediaUrl{i}")
+        if media_url:
+            media_response = requests.get(media_url, auth=(TWILIO_SID, TWILIO_AUTH))
+            if media_response.status_code == 200:
+                # Determine the file extension based on media type
+                content_type = media_response.headers.get("Content-Type")
+                extension = content_type.split('/')[-1] if content_type else 'bin'  # Default to binary if type is unknown
+
+                filename = f"media/{user_id}/{phone_number}/FILE-{current_time}.{extension}"
+                
+                directory = os.path.dirname(filename)
+
+                # Check if the directory exists, create if it doesn't
+                if not os.path.exists(directory):
+                    os.makedirs(directory)
+                    print(f'Created directory: {directory}')
+
+                with open(filename, "wb") as f:
+                    f.write(media_response.content)
+                print(f"Media downloaded and saved as {filename}")
+
+            media_urls.append(filename)
+
+
+    # Convert media URLs list to a comma-separated string for storage
+    media_urls_str = ",".join(media_urls) if media_urls else None
+    
+    client = db.query(Client).filter(Client.phone_number == phone_number, Client.user_id == user_id).first()
+    if not client:
+        client = Client(phone_number=phone_number, user_id=user_id)
+        db.add(client)
+        db.commit()
+        db.refresh(client)
+
+    # Store the message
+    sanitized_content = message.Body.replace('\xa0', ' ')  # Replace non-breaking spaces with regular spaces
+
+    new_message = Message(content=sanitized_content, media_urls=media_urls_str, client_id=client.id)
+    db.add(new_message)
+    db.commit()
+    db.refresh(new_message)
+    # Create a response message
+    response = MessagingResponse()
+    response.message("Message and any media received!")
+
+    # Return the XML response required by Twilio
+    return str(response)
+
+@app.get("/media/{user_id}/{client_id}/{file_name}")
+async def get_media(user_id: str, client_id: str, file_name: str):
+    file_path = f"./media/{user_id}/{client_id}/{file_name}"
+    
+    if os.path.exists(file_path):
+        
+        return FileResponse(file_path)
+    else:
+        raise HTTPException(status_code=404, detail="File not found")
+
 
 @app.get("/")
 async def root():

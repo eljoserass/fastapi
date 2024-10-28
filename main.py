@@ -2,6 +2,7 @@ import os
 from fastapi import FastAPI, HTTPException, Depends, Form, Request
 from fastapi.responses import FileResponse
 from sqlalchemy.orm import Session
+from sqlalchemy.exc import IntegrityError  # Add this import at the top of your file
 from src.backend.database import SessionLocal, engine, Base
 from src.backend.schemas import UserCreate, UserLogin, ClientCreate, OrderCreate
 from src.backend.models import User, Client, Order, Message
@@ -168,12 +169,19 @@ async def whatsapp_webhook(user_id: int, request: Request, message: WhatsAppMess
     # Convert media URLs list to a comma-separated string for storage
     media_urls_str = ",".join(media_urls) if media_urls else None
     
+    # TODO IMPORTANT THIS ONLY WORKS WITH ONE USER
     client = db.query(Client).filter(Client.phone_number == phone_number, Client.user_id == user_id).first()
     if not client:
         client = Client(phone_number=phone_number, user_id=user_id)
         db.add(client)
-        db.commit()
-        db.refresh(client)
+        try:
+            db.commit()  # Attempt to commit the new client
+            db.refresh(client)
+        except IntegrityError:
+            db.rollback()  # Rollback if there's an integrity error
+            client = db.query(Client).filter(Client.phone_number == phone_number, Client.user_id == user_id).first()  # Fetch the existing client
+        else:
+            db.refresh(client)  # Refresh the client if successfully added
 
     # Store the message
     sanitized_content = message.Body.replace('\xa0', ' ')  # Replace non-breaking spaces with regular spaces
@@ -198,6 +206,20 @@ async def get_media(user_id: str, client_id: str, file_name: str):
         return FileResponse(file_path)
     else:
         raise HTTPException(status_code=404, detail="File not found")
+
+@app.delete("/media")
+async def delete_media():
+    media_directory = "./media"
+
+    if os.path.exists(media_directory):
+        for root, dirs, files in os.walk(media_directory, topdown=False):
+            for name in files:
+                os.remove(os.path.join(root, name))
+            for name in dirs:
+                os.rmdir(os.path.join(root, name))
+        return {"detail": "All media files have been deleted."}
+    else:
+        raise HTTPException(status_code=404, detail="Media directory not found")
 
 
 @app.get("/")

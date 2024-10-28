@@ -1,4 +1,5 @@
-from sqlalchemy import Column, Integer, String, ForeignKey
+from datetime import datetime
+from sqlalchemy import Column, Integer, String, ForeignKey, DateTime
 from sqlalchemy.orm import relationship
 from src.backend.database import Base
 
@@ -40,3 +41,4 @@ class Message(Base):
     media_urls = Column(String(255), nullable=True)
     client_id = Column(Integer, ForeignKey("clients.id"))  # Foreign key to link to the Client model
     client = relationship("Client", back_populates="messages")  # Relationship to Client
+    created_at = Column(DateTime, default=datetime.utcnow)  # Timestamp for when the message was created

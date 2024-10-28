@@ -6,3 +6,4 @@ passlib[bcrypt]
 pyjwt
 python-jose
 python-multipart
+twilio

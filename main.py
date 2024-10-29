@@ -256,6 +256,50 @@ async def delete_media():
         raise HTTPException(status_code=404, detail="Media directory not found")
 
 
+@app.delete("/messages")
+async def delete_all_messages(token: str = Depends(oauth2_scheme), db: Session = Depends(get_db)):
+    credentials_exception = HTTPException(status_code=401, detail="Could not validate credentials")
+    try:
+        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+        phone_number: str = payload.get("sub")
+        if phone_number is None:
+            raise credentials_exception
+    except JWTError:
+        raise credentials_exception
+
+    user = db.query(User).filter(User.phone_number == phone_number).first()
+    if user is None:
+        raise credentials_exception
+
+    # Delete all messages for the current user
+    db.query(Message).filter(Message.client.has(user_id=user.id)).delete(synchronize_session=False)
+    db.commit()
+
+    return {"detail": "All messages have been deleted for the current user."}
+
+
+@app.delete("/orders")
+async def delete_all_orders(token: str = Depends(oauth2_scheme), db: Session = Depends(get_db)):
+    credentials_exception = HTTPException(status_code=401, detail="Could not validate credentials")
+    try:
+        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+        phone_number: str = payload.get("sub")
+        if phone_number is None:
+            raise credentials_exception
+    except JWTError:
+        raise credentials_exception
+
+    user = db.query(User).filter(User.phone_number == phone_number).first()
+    if user is None:
+        raise credentials_exception
+
+    # Delete all orders for the current user's clients
+    db.query(Order).filter(Order.client.has(user_id=user.id)).delete(synchronize_session=False)
+    db.commit()
+
+    return {"detail": "All orders have been deleted for the current user."}
+
+
 @app.get("/")
 async def root():
     return {"greeting": "Hello, World!", "message": "Welcome to FastAPI!"}

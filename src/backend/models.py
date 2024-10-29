@@ -1,5 +1,6 @@
 from datetime import datetime
 from sqlalchemy import Column, Integer, String, ForeignKey, DateTime
+from sqlalchemy.types import JSON
 from sqlalchemy.orm import relationship
 from src.backend.database import Base
 
@@ -26,9 +27,12 @@ class Order(Base):
     __tablename__ = "orders"
 
     id = Column(Integer, primary_key=True, index=True)
-    status = Column(String(50))  # Specify length for status
+    status = Column(String(125))  # Specify length for status
     car_plate = Column(String(20))  # Specify length for car_plate
-    order_bullet_list = Column(String(255))  # Specify length for order_bullet_list
+    car_brand = Column(String(125))
+    car_model = Column(String(125))
+    order_requirements = Column(JSON)  # Change to JSON type for order details
+    reference_media_files = Column(JSON)
     client_id = Column(Integer, ForeignKey("clients.id"))
     client = relationship("Client", back_populates="orders")
 

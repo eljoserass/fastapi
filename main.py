@@ -13,6 +13,7 @@ from pydantic import BaseModel, Field
 import requests
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 from twilio.twiml.messaging_response import MessagingResponse
+from language import call_llm
 
 
 # TODO do this correctly
@@ -141,33 +142,6 @@ async def whatsapp_webhook(user_id: int, request: Request, message: WhatsAppMess
     from datetime import datetime
     current_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     phone_number = message.From.replace("whatsapp:", "")
-    for i in range(message.NumMedia):
-        media_url = form_data.get(f"MediaUrl{i}")
-        if media_url:
-            media_response = requests.get(media_url, auth=(TWILIO_SID, TWILIO_AUTH))
-            if media_response.status_code == 200:
-                # Determine the file extension based on media type
-                content_type = media_response.headers.get("Content-Type")
-                extension = content_type.split('/')[-1] if content_type else 'bin'  # Default to binary if type is unknown
-
-                filename = f"media/{user_id}/{phone_number}/FILE-{current_time}.{extension}"
-                
-                directory = os.path.dirname(filename)
-
-                # Check if the directory exists, create if it doesn't
-                if not os.path.exists(directory):
-                    os.makedirs(directory)
-                    print(f'Created directory: {directory}')
-
-                with open(filename, "wb") as f:
-                    f.write(media_response.content)
-                print(f"Media downloaded and saved as {filename}")
-
-            media_urls.append(filename)
-
-
-    # Convert media URLs list to a comma-separated string for storage
-    media_urls_str = ",".join(media_urls) if media_urls else None
     
     # TODO IMPORTANT THIS ONLY WORKS WITH ONE USER
     client = db.query(Client).filter(Client.phone_number == phone_number, Client.user_id == user_id).first()
@@ -186,10 +160,70 @@ async def whatsapp_webhook(user_id: int, request: Request, message: WhatsAppMess
     # Store the message
     sanitized_content = message.Body.replace('\xa0', ' ')  # Replace non-breaking spaces with regular spaces
 
+    for i in range(message.NumMedia):
+        media_url = form_data.get(f"MediaUrl{i}")
+        if media_url:
+            media_response = requests.get(media_url, auth=(TWILIO_SID, TWILIO_AUTH))
+            if media_response.status_code == 200:
+                # Determine the file extension based on media type
+                content_type = media_response.headers.get("Content-Type")
+                extension = content_type.split('/')[-1] if content_type else 'bin'  # Default to binary if type is unknown
+
+                filename = f"media/{user_id}/{client.id}/FILE-{current_time}.{extension}"
+                
+                directory = os.path.dirname(filename)
+
+                # Check if the directory exists, create if it doesn't
+                if not os.path.exists(directory):
+                    os.makedirs(directory)
+                    print(f'Created directory: {directory}')
+
+                with open(filename, "wb") as f:
+                    f.write(media_response.content)
+                print(f"Media downloaded and saved as {filename}")
+
+            media_urls.append(filename)
+
+
+    # Convert media URLs list to a comma-separated string for storage
+    media_urls_str = ",".join(media_urls) if media_urls else None
+
     new_message = Message(content=sanitized_content, media_urls=media_urls_str, client_id=client.id)
     db.add(new_message)
     db.commit()
     db.refresh(new_message)
+
+    all_messages = db.query(Message).filter(Message.client_id == client.id).order_by(Message.id.asc()).all()
+
+    orders = await call_llm(all_messages)
+    
+    # TODO change that if the order exists, but the list of requirements is different (the stuff changed, or is longer or smth) update it
+    for order_data in orders:  # Assuming llm_response returns a list of orders
+        existing_order = db.query(Order).filter(Order.car_plate == order_data.car_plate, Order.client_id == client.id).first()
+        if existing_order:
+                # Update the existing order with new information
+            print (f"this order exists {order_data}")
+            existing_order.status = "Esperando precio"  # Update status or any other fields as needed
+            existing_order.car_brand = order_data.car_brand
+            existing_order.car_model = order_data.car_model
+            existing_order.order_requirements = order_data.order_requirements  # Assuming order_details is a dict
+            existing_order.reference_media_files = order_data.reference_media_files  # Update media files if necessary
+        else:
+            # Create a new order if it doesn't exist
+            print(f"this order is new {order_data}")
+            new_order = Order(
+                status="Esperando precio",
+                car_plate=order_data.car_plate,
+                car_brand=order_data.car_brand,
+                car_model=order_data.car_model,
+                order_requirements=order_data.order_requirements,  # Assuming order_details is a dict
+                reference_media_files=order_data.reference_media_files,
+                client_id=client.id
+            )
+            db.add(new_order)
+
+    # Commit the changes to the database
+    db.commit()
     # Create a response message
     response = MessagingResponse()
     response.message("Message and any media received!")

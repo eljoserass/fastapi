@@ -48,3 +48,6 @@ class OrderCreate(BaseModel):
     car_plate: str
     order_bullet_list: str
     client_id: int
+
+
+

@@ -200,10 +200,17 @@ async def whatsapp_webhook(user_id: int, request: Request, message: WhatsAppMess
     # TODO change that if the order exists, but the list of requirements is different (the stuff changed, or is longer or smth) update it
     for order_data in orders:  # Assuming llm_response returns a list of orders
         car_plate = order_data.car_plate.replace(" ", "").replace("-", "")
+        
+        # Check if required fields are empty
+        if order_data.car_brand == "" and order_data.car_model == "" and car_plate == "" and not order_data.order_requirements:
+            print(f"Order is new with empty fields: car_plate='{car_plate}' car_brand='{order_data.car_brand}' car_model='{order_data.car_model}' order_requirements={order_data.order_requirements} reference_media_files={order_data.reference_media_files}")
+            # Do not skip, proceed with creating a new order
+            continue
+        
         existing_order = db.query(Order).filter(Order.car_plate == car_plate, Order.client_id == client.id).first()
         if existing_order:
-                # Update the existing order with new information
-            print (f"this order exists {order_data}")
+            # Update the existing order with new information
+            print(f"this order exists {order_data}")
             existing_order.status = "Esperando precio"  # Update status or any other fields as needed
             existing_order.car_brand = order_data.car_brand
             existing_order.car_model = order_data.car_model

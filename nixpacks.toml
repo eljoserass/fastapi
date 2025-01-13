@@ -1,0 +1,6 @@
+[phases.setup]
+# ensure necessary system-level packages are available
+packages = [
+  "libmysqlclient-dev",  # mysql development library
+  "pkg-config"           # used by mysqlclient to locate libraries
+]

@@ -67,7 +67,6 @@ async def message_to_orders(messages: list[Message]):
     return completion
 
 
-
 async def call_llm(messages: list[Message]): # -> list[Order] 
 
     completion = await message_to_orders(messages)

@@ -99,7 +99,7 @@ async def get_part_references(ordered_part:str):
                     "items": {
                         "type": "object",
                         "properties": {
-                            "part_refernce": {"type": "string"},
+                            "part_reference": {"type": "string"},
                             "reference_name": {"type": "string"}
                         },
                         "required": ["part_reference", "reference_name"],

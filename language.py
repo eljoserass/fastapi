@@ -74,6 +74,20 @@ async def call_llm(messages: list[Message]): # -> list[Order]
     return None
 
 async def get_part_references(ordered_part:str):
+
+    # # add this paramters to fn , car_brand, car_model
+    # search_queue =""
+    # if car_brand:
+    #     search_queue += f"Car Brand: {car_brand}   "
+
+    # if car_model:
+    #     search_queue += f"Car Model: {car_model}   "
+    # input_prompt = f"Search in the catalog Top3 most relevant \"referencia original\" for this part: {ordered_part}\n\n if there is not any part that is very relevant just return empty",
+
+    # if car_model or car_brand:
+    #     input_prompt = f"Search in the catalog Top3 most relevant \"referencia original\" for this part: {ordered_part}\n\nuse this queue to help your search {queue}\n\n if there is not any part that is very relevant just return empty",
+
+
     reference_format = {
         "type": "json_schema",
         "name": "part_references",
@@ -112,7 +126,7 @@ async def get_part_references(ordered_part:str):
                     },
                     {
                         "type": "input_text",
-                        "text": f"Top3 most relevant \"referencia original\" for this part: {ordered_part}\n\n if there is not any part that is very relevant just return empty",
+                        "text": f"Search in the catalog Top3 most relevant \"referencia original\" for this part: {ordered_part}\n\n if there is not any part that is very relevant just return empty",
                     },
                 ]
             }

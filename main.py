@@ -13,7 +13,7 @@ from pydantic import BaseModel, Field
 import requests
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 from twilio.twiml.messaging_response import MessagingResponse
-from language import call_llm
+from language import call_llm, get_part_references
 
 
 # TODO do this correctly
@@ -215,7 +215,7 @@ async def whatsapp_webhook(user_id: int, request: Request, message: WhatsAppMess
             existing_order.car_brand = order_data.car_brand
             existing_order.car_frame = order_data.car_frame
             existing_order.car_model = order_data.car_model
-            existing_order.order_requirements = order_data.order_requirements  # Assuming order_details is a dict
+            existing_order.order_requirements =[{f"{part_ordered}": await get_part_references(part_ordered)} for part_ordered in order_data.order_requirements] if order_data.order_requirements else [],  # Assuming order_details is a dict
             existing_order.reference_media_files = order_data.reference_media_files  # Update media files if necessary
         else:
             # Create a new order if it doesn't exist
@@ -226,7 +226,7 @@ async def whatsapp_webhook(user_id: int, request: Request, message: WhatsAppMess
                 car_plate=car_plate,
                 car_brand=order_data.car_brand,
                 car_model=order_data.car_model,
-                order_requirements=order_data.order_requirements,  # Assuming order_details is a dict
+                order_requirements=[{f"{part_ordered}": await get_part_references(part_ordered)} for part_ordered in order_data.order_requirements] if order_data.order_requirements else [],  # Assuming order_details is a dict
                 reference_media_files=order_data.reference_media_files,
                 client_id=client.id
             )

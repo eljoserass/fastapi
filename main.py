@@ -13,7 +13,7 @@ from pydantic import BaseModel, Field
 import requests
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 from twilio.twiml.messaging_response import MessagingResponse
-from language import call_llm
+from language import call_llm, get_part_references
 
 
 # TODO do this correctly
@@ -215,7 +215,7 @@ async def whatsapp_webhook(user_id: int, request: Request, message: WhatsAppMess
             existing_order.car_brand = order_data.car_brand
             existing_order.car_frame = order_data.car_frame
             existing_order.car_model = order_data.car_model
-            existing_order.order_requirements = order_data.order_requirements  # Assuming order_details is a dict
+            existing_order.order_requirements =[{f"{part_ordered}": await get_part_references(part_ordered)} for part_ordered in order_data.order_requirements] if order_data.order_requirements else [],  # Assuming order_details is a dict
             existing_order.reference_media_files = order_data.reference_media_files  # Update media files if necessary
         else:
             # Create a new order if it doesn't exist
@@ -226,7 +226,7 @@ async def whatsapp_webhook(user_id: int, request: Request, message: WhatsAppMess
                 car_plate=car_plate,
                 car_brand=order_data.car_brand,
                 car_model=order_data.car_model,
-                order_requirements=order_data.order_requirements,  # Assuming order_details is a dict
+                order_requirements=[{f"{part_ordered}": await get_part_references(part_ordered)} for part_ordered in order_data.order_requirements] if order_data.order_requirements else [],  # Assuming order_details is a dict
                 reference_media_files=order_data.reference_media_files,
                 client_id=client.id
             )
@@ -309,6 +309,39 @@ async def delete_all_orders(token: str = Depends(oauth2_scheme), db: Session = D
 
     return {"detail": "All orders have been deleted for the current user."}
 
+@app.delete("/all")
+async def delete_all(token: str = Depends(oauth2_scheme), db: Session = Depends(get_db)):
+    credentials_exception = HTTPException(status_code=401, detail="Could not validate credentials")
+    try:
+        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+        phone_number: str = payload.get("sub")
+        if phone_number is None:
+            raise credentials_exception
+    except JWTError:
+        raise credentials_exception
+
+    user = db.query(User).filter(User.phone_number == phone_number).first()
+    if user is None:
+        raise credentials_exception
+
+    # Delete all orders for the current user's clients
+    db.query(Order).filter(Order.client.has(user_id=user.id)).delete(synchronize_session=False)
+
+    # Delete all messages for the current user
+    db.query(Message).filter(Message.client.has(user_id=user.id)).delete(synchronize_session=False)
+
+    # Delete media files
+    media_directory = f"./media/{user.id}"
+    if os.path.exists(media_directory):
+        for root, dirs, files in os.walk(media_directory, topdown=False):
+            for name in files:
+                os.remove(os.path.join(root, name))
+            for name in dirs:
+                os.rmdir(os.path.join(root, name))
+
+    db.commit()
+
+    return {"detail": "All orders, messages, and media files have been deleted for the current user."}
 
 @app.get("/")
 async def root():

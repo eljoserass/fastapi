@@ -3,6 +3,7 @@ import sys
 from src.backend.models import Message
 from openai import OpenAI
 from pydantic import BaseModel
+import json
 
 SYSTEM_DEFAULT = "You are an expert at structured data extraction. You will be given unstructured text from a chat with a mechanic asking for quotas on car parts and should convert it into the given structure."
 
@@ -71,3 +72,66 @@ async def call_llm(messages: list[Message]): # -> list[Order]
     else:
         print("No choices found in the completion response.")
     return None
+
+async def get_part_references(ordered_part:str):
+
+    # # add this paramters to fn , car_brand, car_model
+    # search_queue =""
+    # if car_brand:
+    #     search_queue += f"Car Brand: {car_brand}   "
+
+    # if car_model:
+    #     search_queue += f"Car Model: {car_model}   "
+    # input_prompt = f"Search in the catalog Top3 most relevant \"referencia original\" for this part: {ordered_part}\n\n if there is not any part that is very relevant just return empty",
+
+    # if car_model or car_brand:
+    #     input_prompt = f"Search in the catalog Top3 most relevant \"referencia original\" for this part: {ordered_part}\n\nuse this queue to help your search {queue}\n\n if there is not any part that is very relevant just return empty",
+
+
+    reference_format = {
+        "type": "json_schema",
+        "name": "part_references",
+        "schema": {
+            "type": "object",
+            "properties": {
+                "references": {
+                    "type": "array",
+                    "items": {
+                        "type": "object",
+                        "properties": {
+                            "part_refernce": {"type": "string"},
+                            "reference_name": {"type": "string"}
+                        },
+                        "required": ["part_reference", "reference_name"],
+                        "additionalProperties": False
+                    }
+                }
+            },
+            "required": ["references"],
+            "additionalProperties": False
+        },
+        "strict": True
+    }
+
+
+    response = OpenAIclient.responses.create(
+        model="gpt-4o",
+        input=[
+            {
+                "role": "user",
+                "content": [
+                    {
+                        "type": "input_file",
+                        "file_id": "file-CJ8A4DVQZMiaw5gHgKDFGc",
+                    },
+                    {
+                        "type": "input_text",
+                        "text": f"Search in the catalog Top3 most relevant \"referencia original\" for this part: {ordered_part}\n\n if there is not any part that is very relevant just return empty",
+                    },
+                ]
+            }
+        ],
+        text={"format": {"type": "json_schema", "name": "parts_references", "schema": reference_format["schema"]}}
+    )
+
+    return json.loads(response.output_text)

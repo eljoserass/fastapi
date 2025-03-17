@@ -29,6 +29,7 @@ class Order(Base):
     id = Column(Integer, primary_key=True, index=True)
     status = Column(String(125))  # Specify length for status
     car_plate = Column(String(20))  # Specify length for car_plate
+    car_frame = Column(String(20))
     car_brand = Column(String(125))
     car_model = Column(String(125))
     order_requirements = Column(JSON)  # Change to JSON type for order details

@@ -142,7 +142,7 @@ async def whatsapp_webhook(user_id: int, request: Request, message: WhatsAppMess
     from datetime import datetime
     current_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     phone_number = message.From.replace("whatsapp:", "")
-    
+
     # TODO IMPORTANT THIS ONLY WORKS WITH ONE USER
     client = db.query(Client).filter(Client.phone_number == phone_number, Client.user_id == user_id).first()
     if not client:
@@ -170,7 +170,7 @@ async def whatsapp_webhook(user_id: int, request: Request, message: WhatsAppMess
                 extension = content_type.split('/')[-1] if content_type else 'bin'  # Default to binary if type is unknown
 
                 filename = f"media/{user_id}/{client.id}/FILE-{current_time}.{extension}"
-                
+
                 directory = os.path.dirname(filename)
 
                 # Check if the directory exists, create if it doesn't
@@ -196,23 +196,24 @@ async def whatsapp_webhook(user_id: int, request: Request, message: WhatsAppMess
     all_messages = db.query(Message).filter(Message.client_id == client.id).order_by(Message.id.asc()).all()
 
     orders = await call_llm(all_messages)
-    
+
     # TODO change that if the order exists, but the list of requirements is different (the stuff changed, or is longer or smth) update it
     for order_data in orders:  # Assuming llm_response returns a list of orders
         car_plate = order_data.car_plate.replace(" ", "").replace("-", "")
-        
+
         # Check if required fields are empty
         if order_data.car_brand == "" and order_data.car_model == "" and car_plate == "" and not order_data.order_requirements:
             print(f"Order is new with empty fields: car_plate='{car_plate}' car_brand='{order_data.car_brand}' car_model='{order_data.car_model}' order_requirements={order_data.order_requirements} reference_media_files={order_data.reference_media_files}")
             # Do not skip, proceed with creating a new order
             continue
-        
+
         existing_order = db.query(Order).filter(Order.car_plate == car_plate, Order.client_id == client.id).first()
         if existing_order:
             # Update the existing order with new information
             print(f"this order exists {order_data}")
             existing_order.status = "Esperando precio"  # Update status or any other fields as needed
             existing_order.car_brand = order_data.car_brand
+            existing_order.car_frame = order_data.car_frame
             existing_order.car_model = order_data.car_model
             existing_order.order_requirements = order_data.order_requirements  # Assuming order_details is a dict
             existing_order.reference_media_files = order_data.reference_media_files  # Update media files if necessary
@@ -221,6 +222,7 @@ async def whatsapp_webhook(user_id: int, request: Request, message: WhatsAppMess
             print(f"this order is new {order_data}")
             new_order = Order(
                 status="Esperando precio",
+                car_frame=order_data.car_frame, # potentially hardcode it in here
                 car_plate=car_plate,
                 car_brand=order_data.car_brand,
                 car_model=order_data.car_model,
@@ -242,9 +244,9 @@ async def whatsapp_webhook(user_id: int, request: Request, message: WhatsAppMess
 @app.get("/media/{user_id}/{client_id}/{file_name}")
 async def get_media(user_id: str, client_id: str, file_name: str):
     file_path = f"./media/{user_id}/{client_id}/{file_name}"
-    
+
     if os.path.exists(file_path):
-        
+
         return FileResponse(file_path)
     else:
         raise HTTPException(status_code=404, detail="File not found")

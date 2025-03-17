@@ -22,6 +22,7 @@ async def message_to_orders(messages: list[Message]):
         car_plate: str
         car_brand: str
         car_model: str
+        car_frame: str
         order_requirements: list[str]
         reference_media_files: list[str]
 
@@ -44,8 +45,12 @@ async def message_to_orders(messages: list[Message]):
            )
     # TODO maybe change to put the image url instead of passing the base64?
     gpt_messages.append(user_message)
-    print ("GPT MESSAGES")
-    print (gpt_messages)
+    print ("GPT MESSAGES ")
+    # Print content but exclude image_url items
+    for item in gpt_messages[-1]["content"]:
+        if item.get("type") != "image_url":
+            print(item)
+    print ("--------")
     completion = OpenAIclient.beta.chat.completions.parse(model="gpt-4o", messages=gpt_messages, response_format=Orders)
     return completion
 

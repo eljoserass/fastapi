@@ -95,7 +95,7 @@ async def get_part_references(ordered_part:str):
     # if car_model or car_brand:
     #     input_prompt = f"Search in the catalog Top3 most relevant \"referencia original\" for this part: {ordered_part}\n\nuse this queue to help your search {queue}\n\n if there is not any part that is very relevant just return empty",
 
-
+    print ("getting references")
     reference_format = {
         "type": "json_schema",
         "name": "part_references",
@@ -135,12 +135,12 @@ async def get_part_references(ordered_part:str):
                     },
                     {
                         "type": "input_text",
-                        "text": f"Search in the catalog Top3 most relevant \"referencia original\" for this part: {ordered_part}\n\n if there is not any part that is very relevant just return empty",
+                        "text": f"Search in the catalog Top3 most relevant \"referencia original\" for this part: {ordered_part}\n\n if there is not any part that is very relevant just return empty\n\npart_reference is an alphanumeric code of around 10 characters, reference_name is the natural language name of the part",
                     },
                 ]
             }
         ],
         text={"format": {"type": "json_schema", "name": "parts_references", "schema": reference_format["schema"]}}
     )
-
+    print ("reference search done")
     return json.loads(response.output_text)

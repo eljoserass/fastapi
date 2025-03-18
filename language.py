@@ -4,6 +4,7 @@ from src.backend.models import Message
 from openai import OpenAI
 from pydantic import BaseModel
 import json
+import asyncio
 
 SYSTEM_DEFAULT = "You are an expert at structured data extraction. You will be given unstructured text from a chat with a mechanic asking for quotas on car parts and should convert it into the given structure."
 
@@ -52,7 +53,14 @@ async def message_to_orders(messages: list[Message]):
         if item.get("type") != "image_url":
             print(item)
     print ("--------")
-    completion = OpenAIclient.beta.chat.completions.parse(model="gpt-4o", messages=gpt_messages, response_format=Orders)
+    
+    # Run the OpenAI call in a separate thread to avoid blocking the event loop
+    completion = await asyncio.to_thread(
+        OpenAIclient.beta.chat.completions.parse,
+        model="gpt-4o", 
+        messages=gpt_messages, 
+        response_format=Orders
+    )
     return completion
 
 
@@ -113,8 +121,9 @@ async def get_part_references(ordered_part:str):
         "strict": True
     }
 
-
-    response = OpenAIclient.responses.create(
+    # Run the OpenAI call in a separate thread to avoid blocking the event loop
+    response = await asyncio.to_thread(
+        OpenAIclient.responses.create,
         model="gpt-4o",
         input=[
             {
